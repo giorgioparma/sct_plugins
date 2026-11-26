@@ -10,8 +10,7 @@ if __name__ == "__main__":
     enable_quality_logger()
     sct_logger.addHandler(ConsoleHandler())
     run_tests(
-        registry_path="C:\projects\sct-pf-plugins\sct_terrasarx_reader\scripts\local_registry.json",
-        output_dir="C:\projects\sct-pf-plugins\sct_terrasarx_reader\scripts\out",
+        registry_path=r"scripts\local_registry_slc.json",
+        output_dir=r"scripts\out",
         graphs=True,
-        cli=False,
     )
