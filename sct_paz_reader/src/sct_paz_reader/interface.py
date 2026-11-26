@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: Aresys S.r.l. <info@aresys.it>
+# SPDX-License-Identifier: MIT
+
+"""PAZ SCT plugin interface."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable
+
+from sct_paz_reader import __version__
+
+if TYPE_CHECKING:
+    from sct.io.extended_protocols import ALECorrectionFunctionType, SCTInputProduct
+
+
+class PAZProductPlugin:
+    """Plugin for PAZ product format"""
+
+    version = __version__
+
+    @classmethod
+    def get_manager(cls) -> type[SCTInputProduct]:
+        from sct_paz_reader.protocol_implementation import PAZProductManager
+
+        return PAZProductManager
+
+    @classmethod
+    def get_detector(cls) -> Callable[[str | Path], bool]:
+        from eo_products.terrasarx.utilities import is_terrasarx_product
+
+        return is_terrasarx_product
+
+    @classmethod
+    def get_ale_corrector(cls) -> ALECorrectionFunctionType:
+        return None

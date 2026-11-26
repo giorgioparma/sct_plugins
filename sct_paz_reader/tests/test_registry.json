@@ -1,0 +1,11 @@
+{
+    "paz-product-folder": {
+        "slc-spot-pta": {
+            "analysis": "point_target",
+            "product": "${SCT_TEST_DATA_ROOT}/paz/products/PAZ1_SAR__SSC______HS_S_SRA_20241220T165306_20241220T165306",
+            "config": "${SCT_INTEGRATION_TESTS_REF}/configurations/test_906f38dc_config.toml",
+            "targets": "${SCT_TEST_DATA_ROOT}/paz/auxiliaries/neusterlitz_corner_reflectors_data.csv",
+            "reference_output": "${SCT_INTEGRATION_TESTS_REF}/reference_results/paz/slc-spot-pta/pta_res.csv"
+        }
+    }
+}

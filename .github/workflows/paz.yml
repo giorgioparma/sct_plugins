@@ -1,0 +1,261 @@
+name: sct-paz-reader
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    tags:
+      - "sct-paz-reader-v*"
+    paths:
+      - ".github/workflows/paz.yml"
+      - "sct_paz_reader/**"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/paz.yml"
+      - "sct_paz_reader/**"
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+
+    defaults:
+      run:
+        working-directory: sct_paz_reader
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - run: echo "/opt/python/cp312-cp312/bin" >> $GITHUB_PATH
+      - run: python --version
+      - run: python -m pip install ruff
+      - run: python -m ruff --version
+      - run: python -m ruff format --check .
+      - run: python -m ruff check .
+
+  pylint:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+
+    defaults:
+      run:
+        working-directory: sct_paz_reader
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - run: echo "/opt/python/cp312-cp312/bin" >> $GITHUB_PATH
+      - run: python --version
+      - run: python -m pip install pylint
+      - run: python -m pylint --version
+      - run: python -m pylint ./src/sct_paz_reader
+
+  unittest_linux:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+
+    defaults:
+      run:
+        working-directory: sct_paz_reader
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Select Python ${{ matrix.python }}
+        run: |
+          case "${{ matrix.python }}" in
+            3.11) echo "/opt/python/cp311-cp311/bin" >> $GITHUB_PATH ;;
+            3.12) echo "/opt/python/cp312-cp312/bin" >> $GITHUB_PATH ;;
+            3.13) echo "/opt/python/cp313-cp313/bin" >> $GITHUB_PATH ;;
+            3.14) echo "/opt/python/cp314-cp314/bin" >> $GITHUB_PATH ;;
+          esac
+
+      - run: python --version
+      - name: Install package
+        run: python -m pip install -e ".[test]"
+
+      - name: Run unit tests with coverage
+        run: |
+          mkdir -p _build
+          python -m pytest ./tests/ \
+            --junitxml=_build/pytest-report-linux-py${{ matrix.python }}.xml \
+            --cov-report=xml:_build/pytest-coverage-linux-py${{ matrix.python }}.xml
+
+      - name: Upload junit and coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-test-${{ matrix.python }}
+          path: |
+            sct_paz_reader/_build/pytest-report-*.xml
+            sct_paz_reader/_build/pytest-coverage-*.xml
+          retention-days: 14
+
+  unittest_windows:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+
+    defaults:
+      run:
+        working-directory: sct_paz_reader
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - run: python --version
+      - name: Install package
+        run: python -m pip install -e ".[test]"
+
+      - name: Run unit tests with coverage
+        run: |
+          if (-not (Test-Path _build)) { New-Item -ItemType Directory -Path _build | Out-Null }
+          python -m pytest ./tests/ --junitxml=_build/pytest-report-win-py${{ matrix.python }}.xml --cov-report=xml:_build/pytest-coverage-win-py${{ matrix.python }}.xml
+
+      - name: Upload junit and coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-test-${{ matrix.python }}
+          path: |
+            sct_paz_reader/_build/pytest-report-*.xml
+            sct_paz_reader/_build/pytest-coverage-*.xml
+          retention-days: 14
+
+  integration_test_linux:
+    if: >-
+      !startsWith(github.ref, 'refs/tags/') ||
+      startsWith(github.ref_name, 'sct-paz-reader-v')
+
+    runs-on: k8s-runners
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+
+    defaults:
+      run:
+        working-directory: sct_paz_reader
+
+    env:
+      SCT_TEST_DATA_ROOT: /data/reference_dataset
+      SCT_INTEGRATION_TESTS_REF: /data/integration_tests/sct
+
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Select Python ${{ matrix.python }}
+        run: |
+          case "${{ matrix.python }}" in
+            3.11) echo "/opt/python/cp311-cp311/bin" >> $GITHUB_PATH ;;
+            3.12) echo "/opt/python/cp312-cp312/bin" >> $GITHUB_PATH ;;
+            3.13) echo "/opt/python/cp313-cp313/bin" >> $GITHUB_PATH ;;
+            3.14) echo "/opt/python/cp314-cp314/bin" >> $GITHUB_PATH ;;
+          esac
+
+      - name: Install package and readers
+        run: python -m pip install ".[test]"
+
+      - name: Run integration tests
+        run: sct testing -r ./tests/test_registry.json -out ./test_output --cli
+
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+
+    defaults:
+      run:
+        working-directory: sct_paz_reader
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - run: echo "/opt/python/cp312-cp312/bin" >> $GITHUB_PATH
+      - run: uv build --sdist --wheel .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: sct_paz_reader/dist/
+          retention-days: 14
+
+  publish:
+    needs:
+      [ruff, pylint, unittest_linux, unittest_windows, build]
+    if: startsWith(github.ref_name, 'sct-paz-reader-v')
+
+    runs-on: ubuntu-latest
+
+    environment: pypi-sct-paz-reader
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download wheels and sdist
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Clean dist
+        run: |
+          find dist -type f ! -name "*.whl" ! -name "*.tar.gz" -delete
+
+      - name: Show artifacts
+        run: |
+          find dist -type f -maxdepth 2
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
